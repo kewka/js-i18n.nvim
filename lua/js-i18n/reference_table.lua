@@ -1,8 +1,7 @@
 local Path = require("plenary.path")
-local scan = require("plenary.scandir")
 
+local Job = require("plenary.job")
 local analyzer = require("js-i18n.analyzer")
-local c = require("js-i18n.config")
 local utils = require("js-i18n.utils")
 
 local M = {}
@@ -36,18 +35,31 @@ function ReferenceTable.new(config)
 end
 
 function ReferenceTable:load_all()
-  scan.scan_dir(self.config.workspace_dir, {
-    search_pattern = function(entry)
-      if entry:match("node_modules") then
-        return false
+  Job:new({
+    command = "fd",
+    cwd = self.config.workspace_dir,
+    args = {
+      "--type",
+      "f",
+      "--absolute-path",
+      "--exclude",
+      "node_modules",
+      "--extension",
+      "js",
+      "--extension",
+      "jsx",
+      "--extension",
+      "ts",
+      "--extension",
+      "tsx",
+    },
+    on_exit = function(j)
+      local paths = j:result()
+      for _, path in ipairs(paths) do
+        self:load_path(path)
       end
-      return entry:match("%.jsx?$") or entry:match("%.tsx?$")
     end,
-    respect_gitignore = c.config.respect_gitignore,
-    on_insert = function(path)
-      self:load_path(path)
-    end,
-  })
+  }):sync()
 end
 
 function ReferenceTable:load_path(path, content)

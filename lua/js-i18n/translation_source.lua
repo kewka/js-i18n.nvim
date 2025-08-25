@@ -1,8 +1,8 @@
 local Path = require("plenary.path")
 local async = require("plenary.async")
-local scan = require("plenary.scandir")
 local utils = require("js-i18n.utils")
 
+local Job = require("plenary.job")
 local c = require("js-i18n.config")
 
 local M = {}
@@ -24,27 +24,34 @@ end
 --- @return string[]
 function M.get_translation_files(dir)
   local result = {}
-
   local regexps = get_translation_source_regex()
 
-  scan.scan_dir(dir, {
-    search_pattern = function(entry)
-      if entry:match("node_modules") then
-        return false
-      end
-      return entry:match("%.json$")
-    end,
-    respect_gitignore = c.config.respect_gitignore,
-    on_insert = function(path)
-      for _, regexp in ipairs(regexps) do
-        local match_s = regexp:match_str(path)
-        if match_s then
-          table.insert(result, path)
-          break
+  Job:new({
+    command = "fd",
+    cwd = dir,
+    args = {
+      "--type",
+      "f",
+      "--absolute-path",
+      "--exclude",
+      "node_modules",
+      "--extension",
+      "json",
+    },
+    on_exit = function(j)
+      local paths = j:result()
+
+      for _, path in ipairs(paths) do
+        for _, regexp in ipairs(regexps) do
+          local match_s = regexp:match_str(path)
+          if match_s then
+            table.insert(result, path)
+            break
+          end
         end
       end
     end,
-  })
+  }):sync()
 
   return result
 end
